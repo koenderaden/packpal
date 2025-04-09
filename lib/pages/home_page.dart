@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'weer_page.dart';
+import 'inpaklijst_page.dart';
+import '../services/weather_service.dart';
 
 class HomePage extends StatefulWidget {
   @override
@@ -10,7 +12,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final TextEditingController _destinationController = TextEditingController();
-  List<Map<String, String>> _suggestions = [];
+  List<String> _suggestions = [];
   String? selectedLat;
   String? selectedLng;
   bool showButtons = false;
@@ -35,14 +37,45 @@ class _HomePageState extends State<HomePage> {
                   }
                 }
               }
-              return {
-                "name": cityName,
-                "lat": city["lat"].toString(),
-                "lng": city["lng"].toString(),
-              };
+              return cityName;
             })
             .toList();
       });
+    }
+  }
+
+  void _updateSuggestions(String input) {
+    _fetchCitySuggestions(input);
+    setState(() {
+      showButtons = false;
+    });
+  }
+
+  void _generatePackingList() async {
+    String destination = _destinationController.text;
+    if (destination.isNotEmpty) {
+      try {
+        // Haal de temperatuur en weerbeschrijving op voor de bestemming
+        Map<String, dynamic> weatherData = await WeatherService.getWeatherForCity(destination);
+        double temperature = double.parse(weatherData["main"]["temp"].toString());
+        String weatherDescription = weatherData["weather"][0]["description"];
+        String iconUrl = "https://openweathermap.org/img/wn/${weatherData["weather"][0]["icon"]}@2x.png";
+
+        // Navigeer naar de PaklijstPage met de temperatuur, weerbeschrijving en iconUrl
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => PaklijstPage(
+              bestemming: destination,
+              temperature: temperature,
+              weatherDescription: weatherDescription,
+              iconUrl: iconUrl,
+            ),
+          ),
+        );
+      } catch (e) {
+        print("Error fetching weather data: $e");
+      }
     }
   }
 
@@ -100,12 +133,7 @@ class _HomePageState extends State<HomePage> {
                           fillColor: Colors.green.shade50,
                           prefixIcon: Icon(Icons.search, color: Colors.blue),
                         ),
-                        onChanged: (input) {
-                          _fetchCitySuggestions(input);
-                          setState(() {
-                            showButtons = false;
-                          });
-                        },
+                        onChanged: _updateSuggestions,
                       ),
                       SizedBox(height: 10),
 
@@ -137,15 +165,15 @@ class _HomePageState extends State<HomePage> {
                                       child: ListTile(
                                         contentPadding: EdgeInsets.symmetric(horizontal: 15, vertical: 5),
                                         title: Text(
-                                          _suggestions[index]["name"]!,
+                                          _suggestions[index],
                                           style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
                                         ),
                                         trailing: Icon(Icons.location_on, color: Colors.redAccent),
                                         onTap: () {
                                           setState(() {
-                                            _destinationController.text = _suggestions[index]["name"]!;
-                                            selectedLat = _suggestions[index]["lat"];
-                                            selectedLng = _suggestions[index]["lng"];
+                                            _destinationController.text = _suggestions[index];
+                                            selectedLat = null;
+                                            selectedLng = null;
                                             _suggestions.clear();
                                             showButtons = true;
                                           });
@@ -197,13 +225,7 @@ class _HomePageState extends State<HomePage> {
                       child: Text("Bekijk Weer", style: TextStyle(color: Colors.white)),
                     ),
                     ElevatedButton(
-                      onPressed: () {
-                        if (_destinationController.text.isNotEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text("Paklijst functie nog niet geïmplementeerd!")),
-                          );
-                        }
-                      },
+                      onPressed: _generatePackingList,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green,
                         padding: EdgeInsets.symmetric(horizontal: 20, vertical: 15),
